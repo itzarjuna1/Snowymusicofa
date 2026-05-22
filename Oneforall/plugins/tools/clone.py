@@ -22,7 +22,9 @@ CLONE_IMG = "https://graph.org/file/91f8d6a8fd408555c2aa4-202c7be9409983cefd.jpg
 class BotCloner:
     def __init__(self, storage_path: str = "./cloned_bots"):
         self.storage_path = storage_path
+
         self.cloned_bots: Dict[str, dict] = {}
+
         self.plugin_dirs = [
             "play",
             "bot",
@@ -36,12 +38,21 @@ class BotCloner:
         os.makedirs(storage_path, exist_ok=True)
 
     async def load_config(self):
-        config_file = os.path.join(self.storage_path, "bots.json")
+        config_file = os.path.join(
+            self.storage_path,
+            "bots.json"
+        )
 
         try:
             if os.path.exists(config_file):
-                async with aiofiles.open(config_file, "r") as f:
+
+                async with aiofiles.open(
+                    config_file,
+                    "r"
+                ) as f:
+
                     content = await f.read()
+
                     self.cloned_bots = json.loads(content)
 
                 logger.info(
@@ -50,16 +61,24 @@ class BotCloner:
 
         except Exception as e:
             logger.error(f"Load config error: {e}")
+
             self.cloned_bots = {}
 
     async def load_cloned_bots(self):
         return await self.load_config()
 
     async def save_config(self):
-        config_file = os.path.join(self.storage_path, "bots.json")
+        config_file = os.path.join(
+            self.storage_path,
+            "bots.json"
+        )
 
         try:
-            async with aiofiles.open(config_file, "w") as f:
+            async with aiofiles.open(
+                config_file,
+                "w"
+            ) as f:
+
                 await f.write(
                     json.dumps(
                         self.cloned_bots,
@@ -97,12 +116,14 @@ class BotCloner:
 
         try:
             if not self.validate_token(bot_token):
+
                 return {
                     "success": False,
                     "error": "❌ **ɪɴᴠᴀʟɪᴅ ʙᴏᴛ ᴛᴏᴋᴇɴ !**"
                 }
 
             if user_id in self.cloned_bots:
+
                 return {
                     "success": False,
                     "error": "❌ **ʏᴏᴜ ᴀʟʀᴇᴀᴅʏ ʜᴀᴠᴇ ᴀ ᴄʟᴏɴᴇᴅ ʙᴏᴛ !**"
@@ -123,6 +144,7 @@ class BotCloner:
             os.makedirs(plugins_dir, exist_ok=True)
 
             for plugin_dir in self.plugin_dirs:
+
                 src = f"./Oneforall/plugins/{plugin_dir}"
 
                 dst = os.path.join(
@@ -139,7 +161,9 @@ class BotCloner:
 
             plugin_count = 0
 
-            for root, dirs, files in os.walk(plugins_dir):
+            for root, dirs, files in os.walk(
+                plugins_dir
+            ):
 
                 for file in files:
 
@@ -149,13 +173,18 @@ class BotCloner:
                     ):
                         plugin_count += 1
 
+            created_at = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+
             self.cloned_bots[user_id] = {
                 "token": bot_token,
                 "name": bot_name,
-                "created": datetime.now().isoformat(),
+                "created": created_at,
                 "plugins": plugin_count,
-                "status": "active",
-                "dir": bot_dir
+                "status": "running",
+                "dir": bot_dir,
+                "last_restart": "Never"
             }
 
             await self.save_config()
@@ -166,7 +195,13 @@ class BotCloner:
                     f"✅ **{bot_name} "
                     f"ᴄʟᴏɴᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ !**"
                 ),
-                "plugins": plugin_count
+                "plugins": plugin_count,
+                "bot_name": bot_name,
+                "plugins_loaded": plugin_count,
+                "bot_config": {
+                    "bot_dir": bot_dir,
+                    "created_at": created_at
+                }
             }
 
         except Exception as e:
@@ -181,6 +216,7 @@ class BotCloner:
     async def delete_bot(self, user_id: str) -> Dict:
         try:
             if user_id not in self.cloned_bots:
+
                 return {
                     "success": False,
                     "error": "❌ **ɴᴏ ᴄʟᴏɴᴇᴅ ʙᴏᴛ ғᴏᴜɴᴅ !**"
@@ -201,6 +237,7 @@ class BotCloner:
             }
 
         except Exception as e:
+
             return {
                 "success": False,
                 "error": f"❌ `{str(e)}`"
@@ -209,6 +246,7 @@ class BotCloner:
     async def get_status(self, user_id: str) -> Dict:
         try:
             if user_id not in self.cloned_bots:
+
                 return {
                     "success": False,
                     "error": "❌ **ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !**"
@@ -225,16 +263,79 @@ class BotCloner:
             }
 
         except Exception as e:
+
             return {
                 "success": False,
                 "error": f"❌ `{str(e)}`"
             }
+
+    async def get_bot_status(self, user_id: str):
+        result = await self.get_status(user_id)
+
+        if not result["success"]:
+            return result
+
+        bot = self.cloned_bots[user_id]
+
+        return {
+            "success": True,
+            "bot_name": bot["name"],
+            "status": bot["status"],
+            "plugins_loaded": bot["plugins"],
+            "created_at": bot["created"],
+            "last_restart": bot["last_restart"],
+            "bot_dir": bot["dir"]
+        }
+
+    async def start_cloned_bot(self, user_id: str):
+        if user_id not in self.cloned_bots:
+
+            return {
+                "success": False,
+                "error": "❌ ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !"
+            }
+
+        self.cloned_bots[user_id]["status"] = "running"
+
+        self.cloned_bots[user_id]["last_restart"] = (
+            datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        )
+
+        await self.save_config()
+
+        return {
+            "success": True,
+            "message": "✅ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ !"
+        }
+
+    async def stop_cloned_bot(self, user_id: str):
+        if user_id not in self.cloned_bots:
+
+            return {
+                "success": False,
+                "error": "❌ ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !"
+            }
+
+        self.cloned_bots[user_id]["status"] = "stopped"
+
+        await self.save_config()
+
+        return {
+            "success": True,
+            "message": "🛑 ʙᴏᴛ sᴛᴏᴘᴘᴇᴅ !"
+        }
+
+    async def delete_cloned_bot(self, user_id: str):
+        return await self.delete_bot(user_id)
 
     async def list_bots(self) -> Dict:
         try:
             bots_list = []
 
             for _, bot in self.cloned_bots.items():
+
                 bots_list.append({
                     "name": bot["name"],
                     "status": bot["status"],
@@ -249,6 +350,7 @@ class BotCloner:
             }
 
         except Exception:
+
             return {
                 "success": False,
                 "bots": [],
@@ -266,6 +368,7 @@ async def init_cloner(
     global _cloner_instance
 
     if _cloner_instance is None:
+
         _cloner_instance = BotCloner(storage_path)
 
         await _cloner_instance.load_config()
@@ -286,153 +389,3 @@ def get_cloner(
         _cloner_instance = BotCloner()
 
     return _cloner_instance
-
-
-async def setup_clone_commands(app: Client):
-
-    cloner = await init_cloner()
-
-    @app.on_message(filters.command("clone"))
-    async def clone_cmd(
-        client: Client,
-        message: Message
-    ):
-
-        try:
-            user_id = str(message.from_user.id)
-
-            args = message.text.split()
-
-            if len(args) < 3:
-
-                return await message.reply_photo(
-                    photo=CLONE_IMG,
-                    caption=(
-                        "❌ **ᴜsᴀɢᴇ :**\n\n"
-                        "`/clone <token> <name>`\n\n"
-                        "**ᴇxᴀᴍᴘʟᴇ :**\n"
-                        "`/clone 123456:ABC MyBot`"
-                    ),
-                    parse_mode="markdown"
-                )
-
-            token = args[1]
-
-            name = " ".join(args[2:])
-
-            msg = await message.reply_photo(
-                photo=CLONE_IMG,
-                caption="🔄 **ᴄʟᴏɴɪɴɢ ʏᴏᴜʀ ʙᴏᴛ...**",
-                parse_mode="markdown"
-            )
-
-            result = await cloner.clone_bot(
-                user_id,
-                token,
-                name
-            )
-
-            if result["success"]:
-
-                text = (
-                    f"{result['message']}\n\n"
-                    f"📦 **ᴘʟᴜɢɪɴs :** "
-                    f"`{result['plugins']}`"
-                )
-
-            else:
-                text = result["error"]
-
-            await msg.edit_caption(
-                caption=text,
-                parse_mode="markdown"
-            )
-
-        except Exception as e:
-
-            await message.reply_text(
-                f"❌ `{str(e)}`",
-                parse_mode="markdown"
-            )
-
-    @app.on_message(filters.command("clonestatus"))
-    async def clonestatus_cmd(
-        client: Client,
-        message: Message
-    ):
-
-        user_id = str(message.from_user.id)
-
-        result = await cloner.get_status(user_id)
-
-        if result["success"]:
-
-            text = (
-                "🤖 **ᴄʟᴏɴᴇ ʙᴏᴛ sᴛᴀᴛᴜs**\n\n"
-                f"ɴᴀᴍᴇ : `{result['name']}`\n"
-                f"sᴛᴀᴛᴜs : `{result['status']}`\n"
-                f"ᴘʟᴜɢɪɴs : `{result['plugins']}`"
-            )
-
-        else:
-            text = result["error"]
-
-        await message.reply_photo(
-            photo=CLONE_IMG,
-            caption=text,
-            parse_mode="markdown"
-        )
-
-    @app.on_message(filters.command("deleteclone"))
-    async def deleteclone_cmd(
-        client: Client,
-        message: Message
-    ):
-
-        user_id = str(message.from_user.id)
-
-        result = await cloner.delete_bot(user_id)
-
-        await message.reply_photo(
-            photo=CLONE_IMG,
-            caption=(
-                result["message"]
-                if result["success"]
-                else result["error"]
-            ),
-            parse_mode="markdown"
-        )
-
-    @app.on_message(filters.command("listclones"))
-    async def listclones_cmd(
-        client: Client,
-        message: Message
-    ):
-
-        result = await cloner.list_bots()
-
-        if result["success"] and result["total"] > 0:
-
-            text = (
-                f"📊 **ᴛᴏᴛᴀʟ ᴄʟᴏɴᴇs :** "
-                f"`{result['total']}`\n\n"
-            )
-
-            for bot in result["bots"]:
-
-                text += (
-                    f"🤖 `{bot['name']}`\n"
-                    f"📦 ᴘʟᴜɢɪɴs : "
-                    f"`{bot['plugins']}`\n\n"
-                )
-
-        else:
-            text = "❌ **ɴᴏ ᴄʟᴏɴᴇᴅ ʙᴏᴛs ғᴏᴜɴᴅ !**"
-
-        await message.reply_photo(
-            photo=CLONE_IMG,
-            caption=text,
-            parse_mode="markdown"
-        )
-
-    logger.info("✅ Clone commands loaded")
