@@ -7,11 +7,12 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 from .clone import get_cloner
 import logging
+from Oneforall import app 
 
 logger = logging.getLogger(__name__)
 
 
-@Client.on_message(filters.command("clone") & filters.private)
+@app.on_message(filters.command("clone") & filters.private)
 async def clone_command(client: Client, message: Message):
     """
     /clone command handler
@@ -77,7 +78,7 @@ async def clone_command(client: Client, message: Message):
         await message.reply(f"❌ An error occurred: {str(e)}")
 
 
-@Client.on_message(filters.command("cloned") & filters.private)
+@app.on_message(filters.command("cloned") & filters.private)
 async def cloned_command(client: Client, message: Message):
     """
     /cloned command handler
@@ -122,7 +123,7 @@ async def cloned_command(client: Client, message: Message):
         await message.reply(f"❌ An error occurred: {str(e)}")
 
 
-@Client.on_message(filters.command("start_clone") & filters.private)
+@app.on_message(filters.command("startclone") & filters.private)
 async def start_clone_command(client: Client, message: Message):
     """
     /start_clone command handler
@@ -146,7 +147,7 @@ async def start_clone_command(client: Client, message: Message):
         await message.reply(f"❌ An error occurred: {str(e)}")
 
 
-@Client.on_message(filters.command("stop_clone") & filters.private)
+@app.on_message(filters.command("stop_clone") & filters.private)
 async def stop_clone_command(client: Client, message: Message):
     """
     /stop_clone command handler
@@ -170,7 +171,7 @@ async def stop_clone_command(client: Client, message: Message):
         await message.reply(f"❌ An error occurred: {str(e)}")
 
 
-@Client.on_message(filters.command("delete_clone") & filters.private)
+@app.on_message(filters.command("delete_clone") & filters.private)
 async def delete_clone_command(client: Client, message: Message):
     """
     /delete_clone command handler
