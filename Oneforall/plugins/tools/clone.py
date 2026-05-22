@@ -3,9 +3,12 @@
 """
 
 import os
+import sys
 import json
 import shutil
 import logging
+import importlib.util
+
 from typing import Dict, Optional
 from datetime import datetime
 
@@ -31,7 +34,10 @@ class BotCloner:
 
         self.cloned_bots: Dict[str, dict] = {}
 
-        self.running_clients: Dict[str, Client] = {}
+        self.running_clients: Dict[
+            str,
+            Client
+        ] = {}
 
         self.plugin_dirs = [
             "play",
@@ -66,11 +72,14 @@ class BotCloner:
 
                     content = await f.read()
 
-                    self.cloned_bots = json.loads(content)
+                    self.cloned_bots = json.loads(
+                        content
+                    )
 
                 logger.info(
                     f"✅ Loaded "
-                    f"{len(self.cloned_bots)} cloned bots"
+                    f"{len(self.cloned_bots)} "
+                    f"bots"
                 )
 
         except Exception as e:
@@ -134,6 +143,79 @@ class BotCloner:
         except Exception:
             return False
 
+    async def load_plugins(
+        self,
+        user_id: str,
+        clone_client: Client,
+        plugins_dir: str
+    ):
+
+        loaded = 0
+
+        for plugin_dir in self.plugin_dirs:
+
+            path = os.path.join(
+                plugins_dir,
+                plugin_dir
+            )
+
+            if not os.path.exists(path):
+                continue
+
+            for file in os.listdir(path):
+
+                if (
+                    file.endswith(".py")
+                    and not file.startswith("__")
+                ):
+
+                    file_path = os.path.join(
+                        path,
+                        file
+                    )
+
+                    try:
+
+                        module_name = (
+                            f"clone_"
+                            f"{user_id}_"
+                            f"{plugin_dir}_"
+                            f"{file[:-3]}"
+                        )
+
+                        spec = importlib.util.spec_from_file_location(
+                            module_name,
+                            file_path
+                        )
+
+                        module = importlib.util.module_from_spec(
+                            spec
+                        )
+
+                        sys.modules[
+                            module_name
+                        ] = module
+
+                        spec.loader.exec_module(
+                            module
+                        )
+
+                        loaded += 1
+
+                        logger.info(
+                            f"✅ Loaded "
+                            f"{file}"
+                        )
+
+                    except Exception as e:
+
+                        logger.error(
+                            f"❌ Failed "
+                            f"{file}: {e}"
+                        )
+
+        return loaded
+
     async def clone_bot(
         self,
         user_id: str,
@@ -161,8 +243,10 @@ class BotCloner:
                     "success": False,
                     "error": (
                         "❌ **ʏᴏᴜ "
-                        "ᴀʟʀᴇᴀᴅʏ ʜᴀᴠᴇ "
-                        "ᴀ ᴄʟᴏɴᴇᴅ ʙᴏᴛ !**"
+                        "ᴀʟʀᴇᴀᴅʏ "
+                        "ʜᴀᴠᴇ "
+                        "ᴀ ᴄʟᴏɴᴇᴅ "
+                        "ʙᴏᴛ !**"
                     )
                 }
 
@@ -203,7 +287,10 @@ class BotCloner:
                     if os.path.exists(dst):
                         shutil.rmtree(dst)
 
-                    shutil.copytree(src, dst)
+                    shutil.copytree(
+                        src,
+                        dst
+                    )
 
             plugin_count = 0
 
@@ -228,13 +315,16 @@ class BotCloner:
                 api_id=API_ID,
                 api_hash=API_HASH,
                 bot_token=bot_token,
-                plugins={
-                    "root": plugins_dir
-                },
                 workdir=bot_dir
             )
 
             await clone_client.start()
+
+            loaded_plugins = await self.load_plugins(
+                user_id,
+                clone_client,
+                plugins_dir
+            )
 
             self.running_clients[
                 user_id
@@ -248,7 +338,7 @@ class BotCloner:
                 "token": bot_token,
                 "name": bot_name,
                 "created": created_at,
-                "plugins": plugin_count,
+                "plugins": loaded_plugins,
                 "status": "running",
                 "dir": bot_dir,
                 "session": session_name,
@@ -258,7 +348,7 @@ class BotCloner:
             await self.save_config()
 
             logger.info(
-                f"✅ Started cloned bot "
+                f"✅ Started "
                 f"{bot_name}"
             )
 
@@ -269,9 +359,9 @@ class BotCloner:
                     f"ᴄʟᴏɴᴇᴅ "
                     f"sᴜᴄᴄᴇssғᴜʟʟʏ !**"
                 ),
-                "plugins": plugin_count,
+                "plugins": loaded_plugins,
                 "bot_name": bot_name,
-                "plugins_loaded": plugin_count,
+                "plugins_loaded": loaded_plugins,
                 "bot_config": {
                     "bot_dir": bot_dir,
                     "created_at": created_at
@@ -302,7 +392,8 @@ class BotCloner:
                     "success": False,
                     "error": (
                         "❌ ɴᴏ "
-                        "ʙᴏᴛ ғᴏᴜɴᴅ !"
+                        "ʙᴏᴛ "
+                        "ғᴏᴜɴᴅ !"
                     )
                 }
 
@@ -312,12 +403,14 @@ class BotCloner:
                     "success": False,
                     "error": (
                         "❌ ʙᴏᴛ "
-                        "ɪs ᴀʟʀᴇᴀᴅʏ "
+                        "ᴀʟʀᴇᴀᴅʏ "
                         "ʀᴜɴɴɪɴɢ !"
                     )
                 }
 
-            bot = self.cloned_bots[user_id]
+            bot = self.cloned_bots[
+                user_id
+            ]
 
             plugins_dir = os.path.join(
                 bot["dir"],
@@ -329,13 +422,16 @@ class BotCloner:
                 api_id=API_ID,
                 api_hash=API_HASH,
                 bot_token=bot["token"],
-                plugins={
-                    "root": plugins_dir
-                },
                 workdir=bot["dir"]
             )
 
             await clone_client.start()
+
+            await self.load_plugins(
+                user_id,
+                clone_client,
+                plugins_dir
+            )
 
             self.running_clients[
                 user_id
@@ -457,7 +553,9 @@ class BotCloner:
             if os.path.exists(bot_dir):
                 shutil.rmtree(bot_dir)
 
-            del self.cloned_bots[user_id]
+            del self.cloned_bots[
+                user_id
+            ]
 
             await self.save_config()
 
@@ -503,7 +601,9 @@ class BotCloner:
                     )
                 }
 
-            bot = self.cloned_bots[user_id]
+            bot = self.cloned_bots[
+                user_id
+            ]
 
             return {
                 "success": True,
@@ -532,7 +632,9 @@ class BotCloner:
         if not result["success"]:
             return result
 
-        bot = self.cloned_bots[user_id]
+        bot = self.cloned_bots[
+            user_id
+        ]
 
         return {
             "success": True,
@@ -543,35 +645,6 @@ class BotCloner:
             "last_restart": bot["last_restart"],
             "bot_dir": bot["dir"]
         }
-
-    async def list_bots(self) -> Dict:
-
-        try:
-
-            bots_list = []
-
-            for _, bot in self.cloned_bots.items():
-
-                bots_list.append({
-                    "name": bot["name"],
-                    "status": bot["status"],
-                    "plugins": bot["plugins"],
-                    "created": bot["created"]
-                })
-
-            return {
-                "success": True,
-                "bots": bots_list,
-                "total": len(bots_list)
-            }
-
-        except Exception:
-
-            return {
-                "success": False,
-                "bots": [],
-                "total": 0
-            }
 
 
 _cloner_instance: Optional[
