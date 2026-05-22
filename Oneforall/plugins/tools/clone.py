@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import aiofiles
 from pyrogram import Client, filters
-
+from Oneforall import app
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
