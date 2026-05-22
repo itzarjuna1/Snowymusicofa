@@ -1,51 +1,85 @@
 import requests
 from pyrogram import filters
 
-from Oneforall import app
 
-sfw_actions = [
-    "waifu",
-    "neko",
-    "shinobu",
-    "bully",
-    "cry",
-    "hug",
-    "kiss",
-    "lick",
-    "pat",
-    "smug",
-    "highfive",
-    "nom",
-    "bite",
-    "slap",
-    "wink",
-    "poke",
-    "dance",
-    "cringe",
-    "blush",
-    "happy",
-    "kick",
-]
+def setup(app):
 
-# Dynamically create handlers for each sfw action
-for action in sfw_actions:
+    sfw_actions = [
+        "waifu",
+        "neko",
+        "shinobu",
+        "bully",
+        "cry",
+        "hug",
+        "kiss",
+        "lick",
+        "pat",
+        "smug",
+        "highfive",
+        "nom",
+        "bite",
+        "slap",
+        "wink",
+        "poke",
+        "dance",
+        "cringe",
+        "blush",
+        "happy",
+        "kick",
+    ]
 
-    @app.on_message(filters.command(action))
-    def send_action_image(client, message, action=action):
-        try:
-            response = requests.get(f"https://api.waifu.pics/sfw/{action}")
-            response.raise_for_status()
-            image_url = response.json().get("url")
+    for action in sfw_actions:
 
-            if image_url:
-                file_extension = image_url.split(".")[-1].lower()
+        @app.on_message(filters.command(action))
+        async def send_action_image(
+            client,
+            message,
+            action=action
+        ):
+
+            try:
+
+                response = requests.get(
+                    f"https://api.waifu.pics/sfw/{action}"
+                )
+
+                response.raise_for_status()
+
+                image_url = response.json().get("url")
+
+                if not image_url:
+
+                    return await message.reply_text(
+                        "❌ ɴᴏ ɪᴍᴀɢᴇ ғᴏᴜɴᴅ !"
+                    )
+
+                file_extension = (
+                    image_url.split(".")[-1]
+                    .lower()
+                )
+
                 if file_extension == "gif":
-                    client.send_animation(chat_id=message.chat.id, animation=image_url)
-                else:
-                    client.send_photo(chat_id=message.chat.id, photo=image_url)
-            else:
-                message.reply("Could not retrieve any image.")
 
-        except requests.RequestException as e:
-            print(f"Error in API request: {e}")
-            message.reply("An error occurred while retrieving the image.")
+                    await client.send_animation(
+                        chat_id=message.chat.id,
+                        animation=image_url
+                    )
+
+                else:
+
+                    await client.send_photo(
+                        chat_id=message.chat.id,
+                        photo=image_url
+                    )
+
+            except requests.RequestException as e:
+
+                await message.reply_text(
+                    f"❌ API Error:\n`{str(e)}`"
+                )
+
+            except Exception as e:
+
+                await message.reply_text(
+                    f"❌ Error:\n`{str(e)}`"
+                )
