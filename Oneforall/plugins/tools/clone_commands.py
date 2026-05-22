@@ -5,7 +5,7 @@ Provides /clone and /cloned commands
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
-
+from .clone import get_cloner
 import logging
 from Oneforall import app 
 
