@@ -6,7 +6,9 @@ import os
 import json
 import logging
 import shutil
-from typing import Dict, Optional
+import sys
+import importlib.util
+from typing import Dict, Optional, List
 from datetime import datetime
 
 import aiofiles
@@ -22,9 +24,7 @@ CLONE_IMG = "https://graph.org/file/91f8d6a8fd408555c2aa4-202c7be9409983cefd.jpg
 class BotCloner:
     def __init__(self, storage_path: str = "./cloned_bots"):
         self.storage_path = storage_path
-
         self.cloned_bots: Dict[str, dict] = {}
-
         self.plugin_dirs = [
             "play",
             "bot",
@@ -34,7 +34,7 @@ class BotCloner:
             "security",
             "tools"
         ]
-
+        self.loaded_plugins: Dict[str, List] = {}
         os.makedirs(storage_path, exist_ok=True)
 
     async def load_config(self):
@@ -45,14 +45,11 @@ class BotCloner:
 
         try:
             if os.path.exists(config_file):
-
                 async with aiofiles.open(
                     config_file,
                     "r"
                 ) as f:
-
                     content = await f.read()
-
                     self.cloned_bots = json.loads(content)
 
                 logger.info(
@@ -61,7 +58,6 @@ class BotCloner:
 
         except Exception as e:
             logger.error(f"Load config error: {e}")
-
             self.cloned_bots = {}
 
     async def load_cloned_bots(self):
@@ -78,7 +74,6 @@ class BotCloner:
                 config_file,
                 "w"
             ) as f:
-
                 await f.write(
                     json.dumps(
                         self.cloned_bots,
@@ -107,23 +102,114 @@ class BotCloner:
         except Exception:
             return False
 
+    def _load_plugins_for_bot(
+        self,
+        user_id: str,
+        client: Client
+    ) -> int:
+        """Dynamically load and register plugins for a cloned bot"""
+        plugins_dir = os.path.join(
+            self.storage_path,
+            f"bot_{user_id}",
+            "plugins"
+        )
+        
+        loaded_count = 0
+        self.loaded_plugins[user_id] = []
+
+        for plugin_dir in self.plugin_dirs:
+            plugin_path = os.path.join(
+                plugins_dir,
+                plugin_dir
+            )
+
+            if not os.path.exists(plugin_path):
+                continue
+
+            for root, dirs, files in os.walk(plugin_path):
+                for file in files:
+                    if (
+                        file.endswith(".py")
+                        and not file.startswith("__")
+                    ):
+                        file_path = os.path.join(
+                            root,
+                            file
+                        )
+                        
+                        try:
+                            # Dynamically load the plugin module
+                            spec = importlib.util.spec_from_file_location(
+                                f"bot_{user_id}_{file[:-3]}",
+                                file_path
+                            )
+                            
+                            if spec and spec.loader:
+                                module = importlib.util.module_from_spec(spec)
+                                sys.modules[spec.name] = module
+                                spec.loader.exec_module(module)
+                                
+                                # Register handlers with the client
+                                self.loaded_plugins[user_id].append({
+                                    "name": file,
+                                    "module": module
+                                })
+                                
+                                loaded_count += 1
+                                logger.info(
+                                    f"✅ Loaded plugin: {file} "
+                                    f"for bot {user_id}"
+                                )
+                        
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to load plugin {file}: {e}"
+                            )
+
+        return loaded_count
+
+    async def register_handlers(
+        self,
+        user_id: str,
+        client: Client
+    ):
+        """Register all loaded plugins handlers with the client"""
+        if user_id not in self.loaded_plugins:
+            return
+
+        for plugin_info in self.loaded_plugins[user_id]:
+            module = plugin_info["module"]
+            
+            # If the plugin has a setup function, call it
+            if hasattr(module, "setup"):
+                try:
+                    if callable(module.setup):
+                        await module.setup(client)
+                        logger.info(
+                            f"✅ Registered handlers for "
+                            f"{plugin_info['name']}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to register {plugin_info['name']}: {e}"
+                    )
+
     async def clone_bot(
         self,
         user_id: str,
         bot_token: str,
-        bot_name: str
+        bot_name: str,
+        client: Optional[Client] = None
     ) -> Dict:
 
         try:
             if not self.validate_token(bot_token):
-
                 return {
                     "success": False,
                     "error": "❌ **ɪɴᴠᴀʟɪᴅ ʙᴏᴛ ᴛᴏᴋᴇɴ !**"
                 }
 
             if user_id in self.cloned_bots:
-
                 return {
                     "success": False,
                     "error": "❌ **ʏᴏᴜ ᴀʟʀᴇᴀᴅʏ ʜᴀᴠᴇ ᴀ ᴄʟᴏɴᴇᴅ ʙᴏᴛ !**"
@@ -144,16 +230,13 @@ class BotCloner:
             os.makedirs(plugins_dir, exist_ok=True)
 
             for plugin_dir in self.plugin_dirs:
-
                 src = f"./Oneforall/plugins/{plugin_dir}"
-
                 dst = os.path.join(
                     plugins_dir,
                     plugin_dir
                 )
 
                 if os.path.exists(src):
-
                     if os.path.exists(dst):
                         shutil.rmtree(dst)
 
@@ -164,9 +247,7 @@ class BotCloner:
             for root, dirs, files in os.walk(
                 plugins_dir
             ):
-
                 for file in files:
-
                     if (
                         file.endswith(".py")
                         and not file.startswith("__")
@@ -189,6 +270,14 @@ class BotCloner:
 
             await self.save_config()
 
+            # Load plugins if client is provided
+            if client:
+                loaded = self._load_plugins_for_bot(user_id, client)
+                await self.register_handlers(user_id, client)
+                logger.info(
+                    f"✅ Loaded {loaded} plugins for cloned bot"
+                )
+
             return {
                 "success": True,
                 "message": (
@@ -205,18 +294,67 @@ class BotCloner:
             }
 
         except Exception as e:
-
             logger.error(f"Clone error: {e}")
-
             return {
                 "success": False,
                 "error": f"❌ `{str(e)}`"
             }
 
+    async def start_cloned_bot(
+        self,
+        user_id: str,
+        client: Client
+    ):
+        if user_id not in self.cloned_bots:
+            return {
+                "success": False,
+                "error": "❌ ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !"
+            }
+
+        try:
+            # Load and register plugins
+            self._load_plugins_for_bot(user_id, client)
+            await self.register_handlers(user_id, client)
+
+            self.cloned_bots[user_id]["status"] = "running"
+            self.cloned_bots[user_id]["last_restart"] = (
+                datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+            )
+
+            await self.save_config()
+
+            return {
+                "success": True,
+                "message": "✅ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ !"
+            }
+
+        except Exception as e:
+            logger.error(f"Start bot error: {e}")
+            return {
+                "success": False,
+                "error": f"❌ `{str(e)}`"
+            }
+
+    async def stop_cloned_bot(self, user_id: str):
+        if user_id not in self.cloned_bots:
+            return {
+                "success": False,
+                "error": "❌ ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !"
+            }
+
+        self.cloned_bots[user_id]["status"] = "stopped"
+        await self.save_config()
+
+        return {
+            "success": True,
+            "message": "🛑 ʙᴏᴛ sᴛᴏᴘᴘᴇᴅ !"
+        }
+
     async def delete_bot(self, user_id: str) -> Dict:
         try:
             if user_id not in self.cloned_bots:
-
                 return {
                     "success": False,
                     "error": "❌ **ɴᴏ ᴄʟᴏɴᴇᴅ ʙᴏᴛ ғᴏᴜɴᴅ !**"
@@ -229,6 +367,10 @@ class BotCloner:
 
             del self.cloned_bots[user_id]
 
+            # Clean up loaded plugins
+            if user_id in self.loaded_plugins:
+                del self.loaded_plugins[user_id]
+
             await self.save_config()
 
             return {
@@ -237,16 +379,17 @@ class BotCloner:
             }
 
         except Exception as e:
-
             return {
                 "success": False,
                 "error": f"❌ `{str(e)}`"
             }
 
+    async def delete_cloned_bot(self, user_id: str):
+        return await self.delete_bot(user_id)
+
     async def get_status(self, user_id: str) -> Dict:
         try:
             if user_id not in self.cloned_bots:
-
                 return {
                     "success": False,
                     "error": "❌ **ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !**"
@@ -263,7 +406,6 @@ class BotCloner:
             }
 
         except Exception as e:
-
             return {
                 "success": False,
                 "error": f"❌ `{str(e)}`"
@@ -287,55 +429,11 @@ class BotCloner:
             "bot_dir": bot["dir"]
         }
 
-    async def start_cloned_bot(self, user_id: str):
-        if user_id not in self.cloned_bots:
-
-            return {
-                "success": False,
-                "error": "❌ ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !"
-            }
-
-        self.cloned_bots[user_id]["status"] = "running"
-
-        self.cloned_bots[user_id]["last_restart"] = (
-            datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-        )
-
-        await self.save_config()
-
-        return {
-            "success": True,
-            "message": "✅ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ !"
-        }
-
-    async def stop_cloned_bot(self, user_id: str):
-        if user_id not in self.cloned_bots:
-
-            return {
-                "success": False,
-                "error": "❌ ɴᴏ ʙᴏᴛ ғᴏᴜɴᴅ !"
-            }
-
-        self.cloned_bots[user_id]["status"] = "stopped"
-
-        await self.save_config()
-
-        return {
-            "success": True,
-            "message": "🛑 ʙᴏᴛ sᴛᴏᴘᴘᴇᴅ !"
-        }
-
-    async def delete_cloned_bot(self, user_id: str):
-        return await self.delete_bot(user_id)
-
     async def list_bots(self) -> Dict:
         try:
             bots_list = []
 
             for _, bot in self.cloned_bots.items():
-
                 bots_list.append({
                     "name": bot["name"],
                     "status": bot["status"],
@@ -350,7 +448,6 @@ class BotCloner:
             }
 
         except Exception:
-
             return {
                 "success": False,
                 "bots": [],
@@ -368,11 +465,8 @@ async def init_cloner(
     global _cloner_instance
 
     if _cloner_instance is None:
-
         _cloner_instance = BotCloner(storage_path)
-
         await _cloner_instance.load_config()
-
         logger.info("✅ Cloner initialized")
 
     return _cloner_instance
@@ -389,3 +483,4 @@ def get_cloner(
         _cloner_instance = BotCloner()
 
     return _cloner_instance
+            
