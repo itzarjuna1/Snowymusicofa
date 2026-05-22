@@ -16,7 +16,7 @@ from pyrogram.types import Message
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-CLONE_IMG = "https://files.catbox.moe/3rohdi.jpg"
+CLONE_IMG = "https://graph.org/file/91f8d6a8fd408555c2aa4-202c7be9409983cefd.jpg"
 
 
 class BotCloner:
