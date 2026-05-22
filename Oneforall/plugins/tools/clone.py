@@ -13,6 +13,7 @@ import aiofiles
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from Oneforall import app
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -167,22 +168,30 @@ class BotCloner:
 
 
 # Global instance
-cloner = None
+_cloner_instance: Optional[BotCloner] = None
 
 
-async def init_cloner():
+async def init_cloner(storage_path: str = "./cloned_bots") -> BotCloner:
     """Initialize cloner"""
-    global cloner
-    cloner = BotCloner()
-    await cloner.load_config()
-    logger.info("✅ Bot cloner initialized")
+    global _cloner_instance
+    if _cloner_instance is None:
+        _cloner_instance = BotCloner(storage_path)
+        await _cloner_instance.load_config()
+        logger.info("✅ Bot cloner initialized")
+    return _cloner_instance
+
+
+def get_cloner() -> Optional[BotCloner]:
+    """Get the cloner instance - call after init_cloner()"""
+    global _cloner_instance
+    return _cloner_instance
 
 
 # Command handlers
 async def setup_clone_commands(app: Client):
     """Setup clone commands - CALL THIS IN YOUR MAIN BOT"""
     
-    await init_cloner()
+    cloner = await init_cloner()
     
     @app.on_message(filters.command("clone"))
     async def clone_cmd(client: Client, message: Message):
