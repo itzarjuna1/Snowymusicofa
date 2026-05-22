@@ -11,6 +11,7 @@ import shutil
 from typing import Dict, List, Optional
 from datetime import datetime
 import aiofiles
+from pyrogram import Client, filters
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -78,7 +79,7 @@ class BotCloner:
             if user_id in self.cloned_bots:
                 return {
                     "success": False,
-                    "error": f"You already have a cloned bot: {self.cloned_bots[user_id]['bot_name']}. Delete it first using /delete_clone",
+                    "error": f"You already have a cloned bot: {self.cloned_bots[user_id]['bot_name']}. Delete it first using /deleteclone",
                     "existing_bot": self.cloned_bots[user_id]['bot_name']
                 }
             
@@ -420,46 +421,6 @@ class BotCloner:
             return False
 
 
-# Telegram command handlers
-async def handle_clone_command(user_id: str, bot_token: str, bot_name: str, cloner: BotCloner) -> str:
-    """Handle /clone command from Telegram"""
-    result = await cloner.clone_bot(user_id, bot_token, bot_name)
-    
-    if result["success"]:
-        await cloner.start_cloned_bot(user_id)
-        return (
-            f"✅ {result['message']}\n"
-            f"🤖 Bot Name: {result['bot_name']}\n"
-            f"📦 Plugins Loaded: {result['plugins_loaded']}\n\n"
-            f"Your cloned bot is now running with all features!"
-        )
-    else:
-        return f"❌ {result['error']}"
-
-
-async def handle_status_command(user_id: str, cloner: BotCloner) -> str:
-    """Handle /status command from Telegram"""
-    result = await cloner.get_bot_status(user_id)
-    
-    if result["success"]:
-        return (
-            f"🤖 **Bot Status**\n"
-            f"Name: {result['bot_name']}\n"
-            f"Status: {result['status']}\n"
-            f"Plugins: {result['plugins_loaded']}\n"
-            f"Created: {result['created_at']}\n"
-            f"Last Restart: {result['last_restart']}"
-        )
-    else:
-        return f"❌ {result['error']}"
-
-
-async def handle_delete_command(user_id: str, cloner: BotCloner) -> str:
-    """Handle /delete_clone command from Telegram"""
-    result = await cloner.delete_cloned_bot(user_id)
-    return f"{'✅' if result['success'] else '❌'} {result['message'] if result['success'] else result['error']}"
-
-
 # Initialize global cloner instance
 cloner_instance: Optional[BotCloner] = None
 
@@ -470,3 +431,150 @@ def get_cloner(bot_token: str) -> BotCloner:
     if cloner_instance is None:
         cloner_instance = BotCloner(bot_token)
     return cloner_instance
+
+
+# Message handlers using @app.on_message decorators
+async def register_clone_handlers(app: Client):
+    """Register all clone command handlers with the bot"""
+    
+    cloner = get_cloner("")
+    await cloner.load_cloned_bots()
+    
+    @app.on_message(filters.command("clone"))
+    async def clone_command(client, message):
+        """Handle /clone command"""
+        try:
+            user_id = str(message.from_user.id)
+            args = message.command
+            
+            if len(args) < 3:
+                await message.reply(
+                    "❌ Usage: /clone <bot_token> <bot_name>\n\n"
+                    "Example: /clone 123456789:ABCDEFGHIJKLMNOPqrstuvwxyz MyClonedBot"
+                )
+                return
+            
+            bot_token = args[1]
+            bot_name = " ".join(args[2:])
+            
+            result = await cloner.clone_bot(user_id, bot_token, bot_name)
+            
+            if result["success"]:
+                await cloner.start_cloned_bot(user_id)
+                response = (
+                    f"✅ {result['message']}\n"
+                    f"🤖 Bot Name: {result['bot_name']}\n"
+                    f"📦 Plugins Loaded: {result['plugins_loaded']}\n\n"
+                    f"Your cloned bot is now running with all features!"
+                )
+            else:
+                response = f"❌ {result['error']}"
+            
+            await message.reply(response)
+        
+        except Exception as e:
+            logger.error(f"Error in clone command: {e}")
+            await message.reply(f"❌ An error occurred: {str(e)}")
+    
+    @app.on_message(filters.command("clonestatus"))
+    async def status_command(client, message):
+        """Handle /clonestatus command"""
+        try:
+            user_id = str(message.from_user.id)
+            result = await cloner.get_bot_status(user_id)
+            
+            if result["success"]:
+                response = (
+                    f"🤖 **Bot Status**\n"
+                    f"Name: {result['bot_name']}\n"
+                    f"Status: {result['status']}\n"
+                    f"Plugins: {result['plugins_loaded']}\n"
+                    f"Created: {result['created_at']}\n"
+                    f"Last Restart: {result['last_restart']}"
+                )
+            else:
+                response = f"❌ {result['error']}"
+            
+            await message.reply(response)
+        
+        except Exception as e:
+            logger.error(f"Error in status command: {e}")
+            await message.reply(f"❌ An error occurred: {str(e)}")
+    
+    @app.on_message(filters.command("deleteclone"))
+    async def delete_command(client, message):
+        """Handle /deleteclone command"""
+        try:
+            user_id = str(message.from_user.id)
+            result = await cloner.delete_cloned_bot(user_id)
+            
+            response = (
+                f"✅ {result['message']}" if result['success'] 
+                else f"❌ {result['error']}"
+            )
+            
+            await message.reply(response)
+        
+        except Exception as e:
+            logger.error(f"Error in delete command: {e}")
+            await message.reply(f"❌ An error occurred: {str(e)}")
+    
+    @app.on_message(filters.command("stopclone"))
+    async def stop_command(client, message):
+        """Handle /stopclone command"""
+        try:
+            user_id = str(message.from_user.id)
+            result = await cloner.stop_cloned_bot(user_id)
+            
+            response = (
+                f"✅ {result['message']}" if result['success'] 
+                else f"❌ {result['error']}"
+            )
+            
+            await message.reply(response)
+        
+        except Exception as e:
+            logger.error(f"Error in stop command: {e}")
+            await message.reply(f"❌ An error occurred: {str(e)}")
+    
+    @app.on_message(filters.command("startclone"))
+    async def start_command(client, message):
+        """Handle /startclone command"""
+        try:
+            user_id = str(message.from_user.id)
+            result = await cloner.start_cloned_bot(user_id)
+            
+            response = (
+                f"✅ {result['message']}" if result['success'] 
+                else f"❌ {result['error']}"
+            )
+            
+            await message.reply(response)
+        
+        except Exception as e:
+            logger.error(f"Error in start command: {e}")
+            await message.reply(f"❌ An error occurred: {str(e)}")
+    
+    @app.on_message(filters.command("listclones"))
+    async def list_command(client, message):
+        """Handle /listclones command"""
+        try:
+            result = await cloner.list_all_bots()
+            
+            if result["success"] and result["total_bots"] > 0:
+                response = f"📊 **Total Cloned Bots: {result['total_bots']}**\n\n"
+                for bot in result["bots"]:
+                    response += (
+                        f"🤖 {bot['bot_name']}\n"
+                        f"   Status: {bot['status']}\n"
+                        f"   Plugins: {bot['plugins']}\n"
+                        f"   Created: {bot['created_at']}\n\n"
+                    )
+            else:
+                response = "❌ No cloned bots found"
+            
+            await message.reply(response)
+        
+        except Exception as e:
+            logger.error(f"Error in list command: {e}")
+            await message.reply(f"❌ An error occurred: {str(e)}")
