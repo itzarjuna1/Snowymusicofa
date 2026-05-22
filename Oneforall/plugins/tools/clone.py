@@ -16,6 +16,15 @@ import aiofiles
 from pyrogram import Client
 
 from config import API_ID, API_HASH
+import subprocess
+
+subprocess.Popen(
+    [
+        "python3",
+        "clone_runner.py",
+        bot_token
+    ]
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
